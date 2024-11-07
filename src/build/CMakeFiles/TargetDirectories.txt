@@ -1,0 +1,3 @@
+/home/harle/Proyectos/SimuladorDeTrafico/src/build/CMakeFiles/SimuladorDeTrafico.dir
+/home/harle/Proyectos/SimuladorDeTrafico/src/build/CMakeFiles/edit_cache.dir
+/home/harle/Proyectos/SimuladorDeTrafico/src/build/CMakeFiles/rebuild_cache.dir
