@@ -3,6 +3,7 @@
 #include "Vehiculo.h"
 #include "Ruta.h"
 #include <iostream>
+#include <cmath>
 
 Interfaz::Interfaz(const sf::Font& fuente, Grafo& grafo)
     : font(fuente), botonManager(fuente), grafo(grafo), espaciado(100.0f) {
@@ -17,23 +18,29 @@ Interfaz::Interfaz(const sf::Font& fuente, Grafo& grafo)
         static int index = 0;
 
         std::string nodoInicio = grafo.obtenerNodoAleatorio();
-        std::cout << "Nodo inicial obtenido: " << nodoInicio << std::endl; 
-
-        std::vector<std::string> nodosDisponibles = grafo.obtenerNodosConectados(nodoInicio);
-
         sf::Vector2f posicionNodo = grafo.obtenerPosicionNodo(nodoInicio);
-        std::cout << "Posición del nodo " << nodoInicio << ": (" << posicionNodo.x << ", " << posicionNodo.y << ")" << std::endl;
+
+        // Asegurarse de que no haya colisiones inmediatas
+        bool posicionValida = true;
+        for (auto& carro : vehiculos) {
+            if (std::sqrt(std::pow(carro->obtenerPosicion().x - posicionNodo.x, 2) + std::pow(carro->obtenerPosicion().y - posicionNodo.y, 2)) < 50) {
+                posicionValida = false;
+                break;
+            }
+        }
+
+        if (!posicionValida) {
+            std::cout << "Intentando añadir en una posición diferente." << std::endl;
+            // Buscar una nueva posición
+            nodoInicio = grafo.obtenerNodoAleatorio();
+            posicionNodo = grafo.obtenerPosicionNodo(nodoInicio);
+        }
 
         std::vector<sf::Vector2f> rutaCiclica = generarRutaCiclica(grafo, nodoInicio, 20);
-        std::cout << "Ruta cíclica generada desde " << nodoInicio << "." << std::endl;
-
-        sf::Vector2f nuevaPosicionNodo = posicionNodo;
-        nuevaPosicionNodo.x -= 20.0f; 
-        nuevaPosicionNodo.y -= 20.0f; 
 
         Carro* nuevoCarro = new Carro(
             "Carro " + std::to_string(index),
-            nuevaPosicionNodo, 
+            posicionNodo, 
             5.0f,
             grafo,
             "../src/Carro.png",

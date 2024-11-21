@@ -11,7 +11,9 @@
 
 class Grafo {
 public:
+
     Grafo();
+    
 
     void agregarNodo(const std::string& nombre, const sf::Vector2f& posicion, float tiempoVerde, float tiempoRojo, float radio);
     void agregarArista(const std::string& n1, const std::string& n2);
