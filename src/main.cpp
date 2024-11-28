@@ -1,86 +1,80 @@
+// main.cpp
 #include <SFML/Graphics.hpp>
 #include <iostream>
-#include <cmath>  // Incluir cmath para std::sqrt
-#include "Carro.h"
+#include "Vehiculos/Carro.h"
+#include "Vehiculos/Ambulancia.h"
 #include "Grafo.h"
+#include <cmath>
 #include "Interfaz.h"
 #include "Ruta.h"
 
-void dibujarTodo(sf::RenderWindow& window, Grafo& grafo, Interfaz& interfaz, const std::vector<Carro*>& vehiculos, bool mostrarEtiquetas) {
-    window.clear(sf::Color(255, 255, 255)); 
-    interfaz.crearPanelSuperior(window);
-    interfaz.crearPanelDerecho(window);
-    grafo.dibujar(window, mostrarEtiquetas);
-    
-    for (const auto& carro : vehiculos) {
-        carro->dibujar(window);
-    }
+// Declaración de funciones antes de su uso
+void moverCarros(std::vector<Carro*>& vehiculos, float deltaTime, const sf::Font& font);
+void dibujarTodo(sf::RenderWindow& window, Grafo& grafo, Interfaz& interfaz, const std::vector<Carro*>& vehiculos, bool mostrarEtiquetas);
+void eliminarColisiones(std::vector<Carro*>& vehiculos);
 
-    window.display();
-}
+const int MAX_AMBULANCIAS = 5; // Limitar el número de ambulancias activas
 
-void moverCarros(std::vector<Carro*>& vehiculos, float deltaTime, const sf::Font& font) {
+void verificarColisiones(std::vector<Carro*>& vehiculos, Grafo& grafo) {
+    std::vector<std::pair<Carro*, Carro*>> colisiones;
+    int numAmbulancias = 0;
+
     for (auto& carro : vehiculos) {
-        carro->mover(deltaTime, font); // Pasar ambos argumentos a mover
-    }
-}
-
-void verificarColisiones(std::vector<Carro*>& vehiculos, sf::RenderWindow& window, const sf::Font& font) {
-    static bool colisionDetectada = false;
-
-    for (size_t i = 0; i < vehiculos.size(); ++i) {
-        for (size_t j = i + 1; j < vehiculos.size(); ++j) {
-            if (std::sqrt(std::pow(vehiculos[i]->obtenerPosicion().x - vehiculos[j]->obtenerPosicion().x, 2) + 
-                          std::pow(vehiculos[i]->obtenerPosicion().y - vehiculos[j]->obtenerPosicion().y, 2)) < 10) { // Ajuste de margen de colisión
-                
-                if (!colisionDetectada) {
-                    vehiculos[i]->detener(10.0f);
-                    vehiculos[j]->detener(10.0f);
-
-                    std::cout << "Colisión detectada entre (" << vehiculos[i]->obtenerPosicion().x << ", " << vehiculos[i]->obtenerPosicion().y << ") y (" 
-                              << vehiculos[j]->obtenerPosicion().x << ", " << vehiculos[j]->obtenerPosicion().y << ")" << std::endl;
-
-                    colisionDetectada = true;
-
-                    // Crear una ventana emergente
-                    sf::RenderWindow alertWindow(sf::VideoMode(300, 200), "Alerta de Colisión");
-                    while (alertWindow.isOpen()) {
-                        sf::Event event;
-                        while (alertWindow.pollEvent(event)) {
-                            if (event.type == sf::Event::Closed)
-                                alertWindow.close();
-                        }
-
-                        alertWindow.clear();
-                        sf::Text text;
-                        text.setFont(font);
-                        text.setString("Colisión detectada entre carros");
-                        text.setCharacterSize(24);
-                        text.setFillColor(sf::Color::Red);
-                        text.setPosition(20, 80);
-                        alertWindow.draw(text);
-                        alertWindow.display();
-                    }
-                }
-                return;  // Salir después de manejar la colisión
-            }
+        if (dynamic_cast<Ambulancia*>(carro) != nullptr) {
+            numAmbulancias++;
         }
     }
-    colisionDetectada = false;
+
+    for (auto& carro : vehiculos) {
+        carro->verificarColisiones(vehiculos, colisiones);
+    }
+
+    for (auto& colision : colisiones) {
+        if (numAmbulancias < MAX_AMBULANCIAS) {
+            sf::Vector2f posicionColision = colision.first->obtenerPosicion();
+
+            // Añadir una ambulancia para la colisión
+            sf::Vector2f posicionInicialAmbulancia(100, 100); // Determina una posición inicial para la ambulancia
+            std::string nodoInicial = grafo.obtenerNodoDesdePosicion(posicionInicialAmbulancia, 35.0f);
+            std::string nodoColision = grafo.obtenerNodoDesdePosicion(posicionColision, 35.0f);
+            std::vector<sf::Vector2f> rutaAmbulancia = grafo.generarRuta(nodoInicial, nodoColision);
+
+            // Crear la instancia de la ambulancia con mayor velocidad
+            float velocidadAmbulancia = 80.0f; // Cambia este valor para ajustar la velocidad de las ambulancias
+            Ambulancia* ambulancia = new Ambulancia("Ambulancia", posicionInicialAmbulancia, velocidadAmbulancia, grafo, rutaAmbulancia, colision.first->getNodosSemaforos());
+
+            vehiculos.push_back(ambulancia);
+            numAmbulancias++;
+        }
+    }
+}
+
+void eliminarColisiones(std::vector<Carro*>& vehiculos) {
+    for (auto it = vehiculos.begin(); it != vehiculos.end();) {
+        if ((*it)->colisionDetectada() || dynamic_cast<Ambulancia*>(*it) != nullptr) {
+            delete *it;
+            it = vehiculos.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 int main() {
     sf::RenderWindow window(sf::VideoMode(1920, 1080), "Simulador de Trafico");
-    Grafo grafo; 
+
     std::vector<Carro*> vehiculos; 
 
     sf::Font font;
-    if (!font.loadFromFile("../src/Roboto-BoldCondensed.ttf")) {
-        std::cerr << "Error al cargar la fuente." << std::endl;
-        return -1; // Termina si la fuente no se carga
+    if (!font.loadFromFile("../Resources/Roboto-BoldCondensed.ttf")) {
+        // Manejar el error
     }
 
-    Interfaz interfaz(font, grafo);
+    Grafo grafo;
+    Interfaz interfaz(font, grafo); 
+
+    grafo.setInterfaz(&interfaz); 
+    
     sf::Clock clock;
 
     while (window.isOpen()) {
@@ -90,13 +84,17 @@ int main() {
                 window.close();
             }
 
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::E) { // Supón que 'E' es el botón para eliminar colisiones
+                eliminarColisiones(interfaz.obtenerVehiculos());
+            }
+
             interfaz.manejarEventos(event, window);
         }
 
-        float deltaTime = clock.restart().asSeconds();
+        float deltaTime = clock.restart().asSeconds(); 
         grafo.actualizarSemaforos(deltaTime);
-        moverCarros(interfaz.obtenerVehiculos(), deltaTime, font); // Pasar la fuente a moverCarros
-        verificarColisiones(interfaz.obtenerVehiculos(), window, font);
+        moverCarros(interfaz.obtenerVehiculos(), deltaTime, font);
+        verificarColisiones(interfaz.obtenerVehiculos(), grafo);
         dibujarTodo(window, grafo, interfaz, interfaz.obtenerVehiculos(), interfaz.isMostrarEtiquetas());
     }
 
@@ -107,11 +105,42 @@ int main() {
     return 0;
 }
 
+void moverCarros(std::vector<Carro*>& vehiculos, float deltaTime, const sf::Font& font) {
+    for (auto& carro : vehiculos) {
+        carro->mover(deltaTime, font);
+    }
+}
+
+void dibujarTodo(sf::RenderWindow& window, Grafo& grafo, Interfaz& interfaz, const std::vector<Carro*>& vehiculos, bool mostrarEtiquetas) {
+    window.clear(sf::Color(255, 229, 217));  
+
+    sf::RectangleShape fondoGrafo(sf::Vector2f(window.getSize().x, window.getSize().y));
+    fondoGrafo.setFillColor(sf::Color(255, 229, 217));
+    window.draw(fondoGrafo);
+
+    interfaz.crearPanelDerecho(window);
+    interfaz.crearPanelSuperior(window);
+
+    grafo.dibujar(window, mostrarEtiquetas);  
+
+    for (const auto& par : grafo.obtenerNodos()) {
+        par.second.dibujar(window);
+    }
+
+    for (const auto& carro : vehiculos) {
+        carro->dibujar(window);
+        carro->mostrarColision(window, vehiculos); 
+    }
+
+    window.display();  
+}
+
+
 /*
-./SimuladorTrafico
-g++ -o SimuladorTrafico main.cpp Interfaz.cpp Grafo.cpp Vehiculo.cpp BotonManager.cpp Carro.cpp Semaforo.cpp Nodo.cpp Ruta.cpp -I/opt/homebrew/opt/sfml/include -L/opt/homebrew/opt/sfml/lib -std=c++11 -lsfml-graphics -lsfml-window -lsfml-system
 
-chmod +x SimuladorTrafico
+cd build
+make
+./TrafficSimulation
 
-g++ -o SimuladorTrafico main.cpp Interfaz.cpp Grafo.cpp Vehiculo.cpp BotonManager.cpp Carro.cpp Semaforo.cpp Nodo.cpp Ruta.cpp -I/opt/homebrew/opt/sfml/include -L/opt/homebrew/opt/sfml/lib -std=c++17 -lsfml-graphics -lsfml-window -lsfml-system
+
 */
